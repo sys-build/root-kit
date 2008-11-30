@@ -1,0 +1,440 @@
+# gdb macro for kernel debugging
+# Copyright 2008, Qinghuang Feng <qhfeng.kernel@gmail.com>.
+# Under GPL license
+
+
+define lsmod
+        printf "Address\t\ttext\t\tModule\n"
+        set $m=(struct list_head *)&modules
+        set $done=0
+        #获取结构体内特定域的相对偏移，见"gdb技巧"
+        set $offset=&(*(struct module *)0).list
+        while ( !$done )
+                set $mp=(struct module *)((char *)$m->next - (char *)$offset)
+                printf "0x%X\t0x%X\t%s\n", $mp, $mp->module_core,$mp->name
+                if ( $mp->list->next == &modules)
+                        set $done=1
+                end
+                set $m=$m->next
+        end
+        printf "----end----\n"
+
+ end
+
+document lsmod
+list module struct's address, text address and their module name
+end
+
+
+define __show_state
+        if ($arg0->state == 0)
+                printf "running\t\t"
+                else
+                if ($arg0->state == 1)
+                        printf "sleeping\t"
+                        else
+                        if ($arg0->state == 2)
+                                printf "disksleep\t"
+                                else
+                                if ($arg0->state == 4)
+                                        printf "zombie\t"
+                                        else
+                                        if ($arg0->state == 8)
+                                                printf "stopped\t"
+                                                else
+                                                if ($arg0->state == 16)
+                                                        printf "wpaging\t"
+                                                        else
+                                                                printf "%d\t\t", $arg0->state
+                                                        end
+                                                end
+                                        end
+                                end
+                        end
+                end
+end
+document __show_state
+
+internel macro, don't call it by hand
+end
+
+
+define psusr
+        printf "address\t\tstate\t\tuid\tpid\tppid\tcomm\n"
+        set $init_t = &init_task
+        set $tasks_off=((size_t)&((struct task_struct *)0)->tasks)
+        set $next_t=(((char *)($init_t->tasks).next) - $tasks_off)
+        while ($next_t != $init_t)
+		set $next_t=(struct task_struct *)$next_t
+		printf "0x%08X\t", $next_t
+		__show_state $next_t
+		printf "%d\t%d\t%d\t%s\n", \
+			$next_t->uid, $next_t->pid, \
+			$next_t->parent->pid, $next_t->comm
+		set  $next_t=(char *)($next_t->tasks.next) - $tasks_off 
+        end
+        printf "address\t\tstate\t\tuid\tpid\tppid\tcomm\n"
+
+        printf "----end----\n"
+
+end
+document psusr
+print information for all tasks, but not including thread members.
+This command looks like "ps -aux" in userspace.
+end
+
+
+define pskern
+        printf "address\t\tstate\t\tuid\tpid\tppid\tcomm\n"
+        set $init_t = &init_task
+        printf "0x%08X\t", $init_t
+        __show_state $init_t
+        printf "%d\t%d\t%d\t%s\n", \
+                $init_t->uid, $init_t->pid, \
+                $init_t->parent->pid, $init_t->comm
+	
+	set $tasks_off=((size_t)&((struct task_struct *)0)->tasks)
+	set $thread_off=((size_t)&((struct task_struct *)0)->thread_group.next)
+	set $next_t=(((char *)($init_t->tasks).next) - $tasks_off)
+	while ($next_t != $init_t)
+		set $next_t=(struct task_struct *)$next_t
+
+		printf "0x%08X\t", $next_t
+		__show_state $next_t
+		printf "%d\t%d\t%d\t%s\n", \
+			$next_t->uid, $next_t->pid, \
+			$next_t->parent->pid, $next_t->comm
+
+		set $next_th=(((char *)$next_t->thread_group.next) - $thread_off)
+		while ($next_th != $next_t)
+			set $next_th=(struct task_struct *)$next_th
+
+			printf "0x%08X\t", $next_th
+			__show_state $next_th
+			printf "%d\t%d\t%d\t%s\n", \
+				$next_th->uid, $next_th->pid, \
+				$next_th->parent->pid, $next_th->comm
+
+			set $next_th=(((char *)$next_th->thread_group.next) - $thread_off)
+		end
+
+		set  $next_t=(char *)($next_t->tasks.next) - $tasks_off
+        end
+        printf "address\t\tstate\t\tuid\tpid\tppid\tcomm\n"
+        printf "----end----\n"
+
+end
+document pskern
+print infor for all tasks viewed in kernel, including all thread members
+and the swapper(PID==0).
+end
+
+
+
+define lssp
+        printf "address\t\ts_id\n"
+        set $sb_lh=(struct list_head *)&super_blocks
+        #获取结构体内特定域的相对偏移，见"gdb技巧"
+        set $offset=&(*(struct super_block *)0).s_list
+        set $sbp=(struct super_block *)((char *)$sb_lh->next - (char *)$offset)
+        while ( &$sbp->s_list != $sb_lh )
+                printf "0x%08X\t%s\n", $sbp, $sbp->s_id
+                set $sbp=(struct super_block *)((char *)$sbp->s_list.next - (char *)$offset)
+        end
+        printf "----end----\n"
+
+ end
+
+document lssp
+List the super_block and their start addresses
+end
+
+
+
+define eih
+b common_interrupt
+b native_iret
+end
+
+document eih
+eih: early interrupt hacking, break common_interrupt and native_iret
+end
+
+
+define lih
+b apic_timer_interrupt
+b irq_return
+end
+
+document lih
+lih: late interrupt hacking, break apic_timer_interrupt and irq_return
+end
+
+
+define ooi
+c
+stepi
+end
+
+document ooi
+ooi: out of interrupt, return to the instruction interrupted by interrupt handler
+end
+
+
+
+define inar
+printf "-----args start----\n"
+info args
+end
+
+define inlo
+printf "-----local start----\n"
+info local
+end
+
+define btl
+printf "-------------------\n"
+bt
+end
+
+define sibt
+stepi
+btl
+end
+
+define sbt
+step
+btl
+end
+
+define nibt
+nexti
+btl
+end
+
+define nbt
+next
+btl
+end
+
+
+define sibti
+inar
+inlo
+stepi
+btl
+end
+
+define sbti
+inar
+inlo
+step
+btl
+end
+
+define nibti
+inar
+inlo
+nexti
+btl
+end
+
+define nbti
+inar
+inlo
+next
+btl
+end
+
+define a
+ooi
+end
+
+define q
+sibt
+end
+
+define z
+finish
+end
+
+
+
+
+
+
+define __prinfo_nobp
+        printf "\npid %d; addr:0x%08x; comm %s:\n", \
+                $arg0.pid, $arg0, $arg0.comm
+        printf "=====================================\n"
+        set var $stackp = $arg0.thread.sp
+        set var $stack_top = ($stackp & ~4095) + 4096
+
+        while ($stackp < $stack_top)
+                if (*($stackp) > _stext && *($stackp) < _sinittext)
+                        info symbol *($stackp)
+                end
+        set $stackp += 4
+        end
+end
+document __prinfo_nobp
+internal macro, don't call it by hand.
+end
+
+
+define bttnobp
+	set $tasks_off=((size_t)&((struct task_struct *)0)->tasks)
+	set $thread_off=((size_t)&((struct task_struct *)0)->thread_group.next)
+	set $init_t=&init_task
+	set $next_t=(((char *)($init_t->tasks).next) - $tasks_off)
+	while ($next_t != $init_t)
+		set $next_t=(struct task_struct *)$next_t
+		__prinfo_nobp $next_t
+		set $next_th=(((char *)$next_t->thread_group.next) - $thread_off)
+		while ($next_th != $next_t)
+			set $next_th=(struct task_struct *)$next_th
+			__prinfo_nobp $next_th
+			set $next_th=(((char *)$next_th->thread_group.next) - $thread_off)
+		end
+		set $next_t=(char *)($next_t->tasks.next) - $tasks_off
+	end
+end
+document bttnobp
+	dump all thread stack traces on a kernel compiled with !CONFIG_FRAME_POINTER
+end
+
+
+define __prinfo
+        printf "\npid %d; addr:0x%08x; comm %s:\n", \
+                $arg0.pid, $arg0, $arg0.comm
+        printf "=====================================\n"
+        set var $stackp = $arg0.thread.sp
+        set var $stack_top = ($stackp & ~4095) + 4096
+        set var $stack_bot = ($stackp & ~4095)
+
+        set $stackp = *($stackp)
+        while (($stackp < $stack_top) && ($stackp > $stack_bot))
+                set var $addr = *($stackp + 4)
+                info symbol $addr
+                set $stackp = *($stackp)
+        end
+end
+document __prinfo
+internal macro, don't call it by hand.
+end
+
+
+define btt
+	set $tasks_off=((size_t)&((struct task_struct *)0)->tasks)
+	set $thread_off=((size_t)&((struct task_struct *)0)->thread_group.next)
+	set $init_t=&init_task
+	set $next_t=(((char *)($init_t->tasks).next) - $tasks_off)
+	while ($next_t != $init_t)
+		set $next_t=(struct task_struct *)$next_t
+		__prinfo $next_t
+		set $next_th=(((char *)$next_t->thread_group.next) - $thread_off)
+		while ($next_th != $next_t)
+			set $next_th=(struct task_struct *)$next_th
+			__prinfo $next_th	
+			set $next_th=(((char *)$next_th->thread_group.next) - $thread_off)
+		end
+		set $next_t=(char *)($next_t->tasks.next) - $tasks_off
+	end
+end
+document btt
+	dump all thread stack traces on a kernel compiled with CONFIG_FRAME_POINTER
+end
+
+define btpid
+	set var $pid = $arg0
+	set $tasks_off=((size_t)&((struct task_struct *)0)->tasks)
+	set $thread_off=((size_t)&((struct task_struct *)0)->thread_group)
+	set $init_t=&init_task
+	set $next_t=(((char *)($init_t->tasks).next) - $tasks_off)
+	set var $pid_task = 0
+
+	while ($next_t != $init_t)
+		set $next_t=(struct task_struct *)$next_t
+
+		if ($next_t.pid == $pid)
+			set $pid_task = $next_t
+		end
+
+		set $next_th=(((char *)$next_t->thread_group.next) - $thread_off)
+		while ($next_th != $next_t)
+			set $next_th=(struct task_struct *)$next_th
+			if ($next_th.pid == $pid)
+				set $pid_task = $next_th
+			end
+			set $next_th=(((char *)$next_th->thread_group.next) - $thread_off)
+		end
+		set $next_t=(char *)($next_t->tasks.next) - $tasks_off
+	end
+
+	__prinfo $pid_task
+
+end
+document btpid
+	backtrace of pid
+end
+
+
+define trapinfo
+	set var $pid = $arg0
+	set $tasks_off=((size_t)&((struct task_struct *)0)->tasks)
+	set $thread_off=((size_t)&((struct task_struct *)0)->thread_group.next)
+	set $init_t=&init_task
+	set $next_t=(((char *)($init_t->tasks).next) - $tasks_off)
+	set var $pid_task = 0
+
+	while ($next_t != $init_t)
+		set $next_t=(struct task_struct *)$next_t
+
+		if ($next_t.pid == $pid)
+			set $pid_task = $next_t
+		end
+
+		set $next_th=(((char *)$next_t->thread_group.next) - $thread_off)
+		while ($next_th != $next_t)
+			set $next_th=(struct task_struct *)$next_th
+			if ($next_th.pid == $pid)
+				set $pid_task = $next_th
+			end
+			set $next_th=(((char *)$next_th->thread_group.next) - $thread_off)
+		end
+		set $next_t=(char *)($next_t->tasks.next) - $tasks_off
+	end
+
+	printf "Trapno %ld, cr2 0x%lx, error_code %ld\n", $pid_task.thread.trap_no, \
+
+				$pid_task.thread.cr2, $pid_task.thread.error_code
+
+end
+document trapinfo
+	Run info threads and lookup pid of thread #1
+	'trapinfo <pid>' will tell you by which trap & possibly
+	address the kernel panicked.
+end
+
+
+define dmesg
+	set $i = 0
+	set $end_idx = (log_end - 1) & (log_buf_len - 1)
+
+	while ($i < logged_chars)
+		set $idx = (log_end - 1 - logged_chars + $i) & (log_buf_len - 1)
+
+		if ($idx + 100 <= $end_idx) || \
+		   ($end_idx <= $idx && $idx + 100 < log_buf_len)
+			printf "%.100s", &log_buf[$idx]
+			set $i = $i + 100
+		else
+			printf "%c", log_buf[$idx]
+			set $i = $i + 1
+		end
+	end
+end
+document dmesg
+	print the kernel ring buffer
+end
+
