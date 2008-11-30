@@ -1,5 +1,10 @@
 #!/usr/bin/perl
 
+# sniper-patch-carrier: tool for patch-set sending
+# usage description is partially copied from sendpatchset.
+# Copyright 2008, Qinghuang Feng <qhfeng.kernel@gmail.com>.
+# Under GPL license
+
 use Email::Send;
 use Email::Simple::Creator; # or other Email::
 
