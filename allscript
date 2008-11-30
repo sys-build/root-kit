@@ -1,4 +1,8 @@
 # gdb macro for kernel debugging
+# Copyright:
+# Alexander Nyberg <alexn@telia.com> 
+# V Srivatsa <vatsa@in.ibm.com> 
+# Maneesh Soni <maneesh@in.ibm.com>
 # Copyright 2008, Qinghuang Feng <qhfeng.kernel@gmail.com>.
 # Under GPL license
 
