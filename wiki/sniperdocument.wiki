@@ -1,0 +1,11 @@
+*linux内核调试指南*
+
+http://wiki.zh-kernel.org/sniper
+
+*linux内核测试指南*
+
+http://www.cnkernel.org/note/tester.tar.bz2.pdf
+
+*BSD ROOTKIT 设计--内核黑客指引书*
+
+http://bbs.chinaunix.net/viewthread.php?tid=1005006
