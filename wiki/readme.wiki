@@ -1,4 +1,10 @@
-一些辅助内核分析或开发的小工具。目前已经完成的有：
+一些辅助内核分析或开发的小工具。
+
+参考信息：
+
+http://wiki.zh-kernel.org/sniper
+
+目前已经完成的工具有：
 
 sniper-patch-carrier: linux内核补丁集提交工具
 
