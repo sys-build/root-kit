@@ -156,22 +156,20 @@ end
 
 
 define eih
-b common_interrupt
 b native_iret
 end
 
 document eih
-eih: early interrupt hacking, break common_interrupt and native_iret
+eih: early interrupt hacking, break native_iret for common_interrupt
 end
 
 
 define lih
-b apic_timer_interrupt
 b irq_return
 end
 
 document lih
-lih: late interrupt hacking, break apic_timer_interrupt and irq_return
+lih: late interrupt hacking, break and irq_return for apic_timer_interrupt
 end
 
 
