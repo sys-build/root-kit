@@ -169,7 +169,7 @@ b irq_return
 end
 
 document lih
-lih: late interrupt hacking, break and irq_return for apic_timer_interrupt
+lih: late interrupt hacking, break irq_return for apic_timer_interrupt
 end
 
 
